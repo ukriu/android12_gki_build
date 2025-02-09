@@ -29,15 +29,6 @@ on:
           - thin
           - none
         default: thin
-      kernelsu_variant:
-        description: "Choose KernelSU"
-        required: true
-        type: choice
-        options:
-          - Official
-          - Next
-          - MKSU
-        default: Official
       kernelsu_branch:
         description: "Choose ksu branch"
         required: true
@@ -54,407 +45,50 @@ on:
         default: ""  # Default is empty, but can be filled in if 'Other' is selected
 
 jobs:
-  build-gki:
-    runs-on: ${{ inputs.runner }}
-    steps:
-      - name: Maximize build space
-        if: ${{ inputs.runner == 'ubuntu-22.04' }}
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 8192
-          temp-reserve-mb: 2048
-          swap-size-mb: 8192
-          remove-dotnet: "true"
-          remove-android: "true"
-          remove-haskell: "true"
-          remove-codeql: "true"
-       
-      - name: Clean up workspace
-        run: rm -rf ${{ github.workspace }}/*
-      
-      - name: Set CONFIG Environment Variable
-        run: |
-          CONFIG="android12-5.10-X"
-          echo "CONFIG=$CONFIG" >> $GITHUB_ENV
-          echo "CONFIG set to: $CONFIG"
-          
-      - name: Cache prebuilt toolchain
-        id: cache-toolchain
-        uses: actions/cache@v4
-        with:
-          path: |
-            kernel-build-tools
-            mkbootimg
-          key: toolchain-${{ runner.os }}-${{ hashFiles('**/workflow.yml') }}
-          restore-keys: |
-            toolchain-${{ runner.os }}-
+  build-ksu-gki:
+    uses: ./.github/workflows/main.yml
+    secrets: inherit
+    with:
+      runner: ${{ inputs.runner }}
+      lto_type: ${{ inputs.lto_type }}
+      kernelsu_variant: "KSU"
+      kernelsu_branch: ${{ inputs.kernelsu_branch }}
+      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
-      - name: Download prebuilt toolchain (if cache is missing)
-        if: steps.cache-toolchain.outputs.cache-hit != 'true'
-        run: |
-          AOSP_MIRROR=https://android.googlesource.com
-          BRANCH=main-kernel-build-2024
-          git clone $AOSP_MIRROR/kernel/prebuilts/build-tools -b $BRANCH --depth 1 kernel-build-tools
-          git clone $AOSP_MIRROR/platform/system/tools/mkbootimg -b $BRANCH --depth 1 mkbootimg
-      
-      - name: Set environment variables
-        run: |
-          echo "AVBTOOL=$GITHUB_WORKSPACE/kernel-build-tools/linux-x86/bin/avbtool" >> $GITHUB_ENV
-          echo "MKBOOTIMG=$GITHUB_WORKSPACE/mkbootimg/mkbootimg.py" >> $GITHUB_ENV
-          echo "UNPACK_BOOTIMG=$GITHUB_WORKSPACE/mkbootimg/unpack_bootimg.py" >> $GITHUB_ENV
+  build-mksu-gki:
+    uses: ./.github/workflows/main.yml
+    secrets: inherit
+    with:
+      runner: ${{ inputs.runner }}
+      lto_type: ${{ inputs.lto_type }}
+      kernelsu_variant: "MKSU"
+      kernelsu_branch: ${{ inputs.kernelsu_branch }}
+      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
-      - name: Set boot sign key
-        env:
-          BOOT_SIGN_KEY: ${{ secrets.BOOT_SIGN_KEY }}
-        run: |
-          if [ ! -z "$BOOT_SIGN_KEY" ]; then
-            echo "$BOOT_SIGN_KEY" > ./kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem
-            echo "BOOT_SIGN_KEY_PATH=$GITHUB_WORKSPACE/kernel-build-tools/linux-x86/share/avb/testkey_rsa2048.pem" >> $GITHUB_ENV
-          else
-            echo "BOOT_SIGN_KEY is not set. Exiting..."
-            exit 1
-          fi
-      
-      - name: Install Repo
-        run: |
-          # Install dependencies
-          mkdir -p ./git-repo
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ./git-repo/repo
-          chmod a+rx ./git-repo/repo
-          echo "REPO=$GITHUB_WORKSPACE/./git-repo/repo" >> $GITHUB_ENV
-
-      - name: Clone AnyKernel3 and Other Dependencies
-        run: |
-          echo "Cloning AnyKernel3 and other dependencies..."
-
-          # Define the branch names using the inputs values
-          ANYKERNEL_BRANCH="android12-5.10"
-          SUSFS_BRANCH="gki-$ANYKERNEL_BRANCH"
-
-          # Debug print the branches
-          echo "Using branch for AnyKernel3: $ANYKERNEL_BRANCH"
-          echo "Using branch for SUSFS: $SUSFS_BRANCH"
-
-          # Clone repositories using the branch names
-          git clone https://github.com/ukriu/AnyKernel3.git -b "$ANYKERNEL_BRANCH"
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH"
-          git clone https://github.com/WildPlusKernel/kernel_patches.git
-
-      - name: Initialize and Sync Kernel Source
-        run: |
-          echo "Creating folder for configuration: $CONFIG..."
-          mkdir -p "$CONFIG"
-          cd "$CONFIG"
-
-          # Initialize and sync kernel source
-          echo "Initializing and syncing kernel source..."
-          FORMATTED_BRANCH="android12-5.10-lts"
-          $REPO init --depth=1 --u https://android.googlesource.com/kernel/manifest -b common-${FORMATTED_BRANCH} --repo-rev=v2.16
-
-          REMOTE_BRANCH=$(git ls-remote https://android.googlesource.com/kernel/common ${FORMATTED_BRANCH})
-          DEFAULT_MANIFEST_PATH=.repo/manifests/default.xml
-
-          # Check if branch is deprecated
-          if grep -q deprecated <<< $REMOTE_BRANCH; then
-            echo "Found deprecated branch: $FORMATTED_BRANCH"
-            sed -i "s/\"${FORMATTED_BRANCH}\"/\"deprecated\/${FORMATTED_BRANCH}\"/g" $DEFAULT_MANIFEST_PATH
-          fi
-
-          # Sync repo and apply patches
-          $REPO --version
-          $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
-
-      - name: Determine the branch for KernelSU & MKSU
-        if: ${{ inputs.kernelsu_variant == 'Official' || inputs.kernelsu_variant == 'MKSU' }}
-        run: |
-          if [[ "${{ inputs.kernelsu_branch }}" == "Stable" ]]; then
-            echo "BRANCH=-" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev" ]]; then
-            echo "BRANCH=-s main" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Other" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
-            echo "BRANCH=-s ${{ inputs.kernelsu_branch_other }}" >> $GITHUB_ENV
-          else
-            echo "Error: Custom branch not provided for 'Other'" >&2
-            exit 1
-          fi
-          
-      - name: Determine the branch for kernelsu-next
-        if: ${{ inputs.kernelsu_variant == 'Next' }}
-        run: |
-          if [[ "${{ inputs.kernelsu_branch }}" == "Stable" ]]; then
-            echo "BRANCH=-" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Dev" ]]; then
-            echo "BRANCH=-s next" >> $GITHUB_ENV
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Other" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
-            echo "BRANCH=-s ${{ inputs.kernelsu_branch_other }}" >> $GITHUB_ENV
-          else
-            echo "Error: Custom branch not provided for 'Other'" >&2
-            exit 1
-          fi
-          
-      - name: Add KernelSU-Official
-        if: ${{ inputs.kernelsu_variant == 'Official' }}
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
-          echo "Adding KernelSU..."
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
-
-      - name: Add KernelSU-Next
-        if: ${{ inputs.kernelsu_variant == 'Next' }}
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
-          echo "Adding KernelSU NEXT..."
-          curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash $BRANCH
-
-      - name: Add KernelSU-MKSU
-        if: ${{ inputs.kernelsu_variant == 'MKSU'}}
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
-
-          echo "Adding MKSU..."
-          curl -LSs "https://raw.githubusercontent.com/5ec1cff/KernelSU/main/kernel/setup.sh" | bash $BRANCH
-
-          # Revert commit of remove pts_unix98_lookup_pre
-          cd KernelSU
-          git revert -m 1 $(git log --grep="remove devpts hook" --pretty=format:"%h") -n
-          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 12063)
-          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
-
-      - name: Apply SUSFS Patches KernelSU
-        if: ${{ inputs.kernelsu_variant == 'Official' }}
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
-
-          echo "Applying SUSFS patches..."
-
-          # Copy SUSFS patches
-          cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch ./common/
-          cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-          cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-
-          cd ./KernelSU
-          echo "Applying SUSFS patches..."
-          patch -p1 --forward < 10_enable_susfs_for_ksu.patch
-
-          # Change to common directory and apply SUSFS patch
-          cd ../common
-          patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch || true
-
-      - name: Apply SUSFS Patches KernelSU-Next
-        if: ${{ inputs.kernelsu_variant == 'Next' }}
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
-
-          echo "Applying SUSFS patches..."
-
-          # Copy SUSFS patches
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch ./common/
-          cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-          cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-
-          cd ./KernelSU-Next
-          echo "Applying next SUSFS patches..."
-          cp ../../kernel_patches/KernelSU-Next-Implement-SUSFS-v1.5.5-Universal.patch ./
-          patch -p1 --forward < KernelSU-Next-Implement-SUSFS-v1.5.5-Universal.patch || true
-
-          # Change to common directory and apply SUSFS patch
-          cd ../common
-          patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch || true
-
-      - name: Apply SUSFS Patches MKSU
-        if: ${{ inputs.kernelsu_variant == 'MKSU' }}
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
-
-          echo "Applying SUSFS patches..."
-
-          # Copy SUSFS patches
-          cp ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU/
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android12-5.10.patch ./common/
-          cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-          cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-
-          cd ./KernelSU
-          echo "Applying SUSFS patches..."
-          patch -p1 --forward < 10_enable_susfs_for_ksu.patch || true
-          
-          echo "Applying mksu_susfs.patch"
-          cp ../../kernel_patches/mksu_susfs.patch ../KernelSU/
-          patch -p1 < mksu_susfs.patch
-
-          # Change to common directory and apply SUSFS patch
-          cd ../common
-          patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch || true
-
-      - name: Apply Hide Stuff Patches
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG/common"
-          # Apply additional patch
-          cp ../../kernel_patches/69_hide_stuff.patch ./
-          patch -p1 -F 3 < 69_hide_stuff.patch
-
-      - name: Add SUSFS Configuration Settings
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
-
-          echo "Adding configuration settings to gki_defconfig..."
-
-          # Add SUSFS configuration settings
-          echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_OVERLAYFS=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_TRY_UMOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SPOOF_UNAME=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_ENABLE_LOG=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_SU=y" >> ./common/arch/arm64/configs/gki_defconfig
-
-          # Add additional tmpfs config setting
-          echo "CONFIG_TMPFS_XATTR=y" >> ./common/arch/arm64/configs/gki_defconfig
-
-          # Remove check_defconfig
-          sed -i 's/check_defconfig//' ./common/build.config.gki
-
-      - name: Build the Kernel
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd "$CONFIG"
-
-          sed -i '$s|echo "\$res"|echo "\$res-🍻-blehSU-🍻"|' ./common/scripts/setlocalversion
-
-          # Run perl command to modify UTS_VERSION
-          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="# gold has to be the worst device ever"}' ./common/scripts/mkcompile_h
-
-          echo "Building the kernel..."
-          sed -i 's/-dirty//' ./common/scripts/setlocalversion
-          LTO=${{ inputs.lto_type }} BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
-
-      - name: Create Bootimgs Folder and Copy Images
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          mkdir bootimgs
-
-          echo "Creating bootimgs folder and copying images..."
-          cp ./$CONFIG/out/android12-5.10/dist/Image ./bootimgs
-          cp ./$CONFIG/out/android12-5.10/dist/Image.lz4 ./bootimgs
-          cp ./$CONFIG/out/android12-5.10/dist/Image ./
-          cp ./$CONFIG/out/android12-5.10/dist/Image.lz4 ./
-
-          # Create gzip of the Image file
-          gzip -n -k -f -9 ./Image > ./Image.gz
-
-      - name: Create ZIP Files for Different Formats
-        run: |
-          echo "Creating zip files for all formats..."
-          cd ./AnyKernel3
-
-          # Create and upload zip for each format
-          ZIP_NAME="android12-5.10.X-lts-AnyKernel3.zip"
-          echo "Creating zip file: $ZIP_NAME..."
-          mv ../Image ./Image
-          zip -r "../$ZIP_NAME" ./*
-          rm ./Image
-
-          ZIP_NAME="android12-5.10.X-lts-AnyKernel3-lz4.zip"
-          echo "Creating zip file: $ZIP_NAME..."
-          mv ../Image.lz4 ./Image.lz4
-          zip -r "../$ZIP_NAME" ./*
-          rm ./Image.lz4
-
-          ZIP_NAME="android12-5.10.X-lts-AnyKernel3-gz.zip"
-          echo "Creating zip file: $ZIP_NAME..."
-          mv ../Image.gz ./Image.gz
-          zip -r "../$ZIP_NAME" ./*
-          rm ./Image.gz
-
-      - name: Run Boot Image android12 Build Script
-        run: |
-          echo "Changing to configuration directory: $CONFIG..."
-          cd bootimgs
-
-          GKI_URL=https://dl.google.com/android/gki/gki-certified-boot-android12-5.10-"lts"_r1.zip
-          FALLBACK_URL=https://dl.google.com/android/gki/gki-certified-boot-android12-5.10-2023-01_r1.zip
-
-          # Check if the GKI URL is available
-          echo "Checking if GKI kernel URL is reachable: $GKI_URL"
-          status=$(curl -sL -w "%{http_code}" "$GKI_URL" -o /dev/null)
-
-          if [ "$status" = "200" ]; then
-              echo "[+] Downloading from GKI_URL"
-              curl -Lo gki-kernel.zip "$GKI_URL"
-          else
-              echo "[+] $GKI_URL not found, using $FALLBACK_URL"
-              curl -Lo gki-kernel.zip "$FALLBACK_URL"
-          fi
-
-          # Unzip the downloaded kernel and remove the zip
-          echo "Unzipping the downloaded kernel..."
-          unzip gki-kernel.zip && rm gki-kernel.zip
-
-          echo "Unpacking boot.img..."
-          FULL_PATH=$(pwd)/boot-5.10.img
-          echo "Unpacking using: $FULL_PATH"
-
-          echo "Running unpack_bootimg.py..."
-          $UNPACK_BOOTIMG --boot_img="$FULL_PATH"
-
-          echo "Building Image.gz"
-          gzip -n -k -f -9 ./Image > ./Image.gz
-
-          echo "Building boot.img"
-          $MKBOOTIMG --header_version 4 --kernel Image --output boot.img --ramdisk out/ramdisk --os_version 12.0.0 --os_patch_level "lts"
-          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
-          cp ./boot.img ../android12-5.10.X-lts-boot.img
-
-          echo "Building boot-gz.img"
-          $MKBOOTIMG --header_version 4 --kernel Image.gz --output boot-gz.img --ramdisk out/ramdisk --os_version 12.0.0 --os_patch_level "lts"
-          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot-gz.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
-          cp ./boot-gz.img ../android12-5.10.X-lts-boot-gz.img
-
-          echo "Building boot-lz4.img"
-          $MKBOOTIMG --header_version 4 --kernel Image.lz4 --output boot-lz4.img --ramdisk out/ramdisk --os_version 12.0.0 --os_patch_level "lts"
-          $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot-lz4.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
-          cp ./boot-lz4.img ../android12-5.10.X-lts-boot-lz4.img
-
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-${{ env.CONFIG }}
-          path: |
-            *.zip
-            *.img
+  build-ksu-next-gki:
+    uses: ./.github/workflows/main.yml
+    secrets: inherit
+    with:
+      runner: ${{ inputs.runner }}
+      lto_type: ${{ inputs.lto_type }}
+      kernelsu_variant: "KSU_NEXT"
+      kernelsu_branch: ${{ inputs.kernelsu_branch }}
+      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
   release:
     runs-on: ubuntu-latest
     needs:
-        - build-gki
+        - build-ksu-gki
+        - build-mksu-gki
+        - build-ksu-next-gki
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: ukriu
       REPO_NAME: android12_gki_build
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: "GKI Kernels With KernelSU ${{ inputs.kernelsu_variant }} & SUSFS v1.5.5"
+      RELEASE_NAME: "GKI Kernels With KernelSU & SUSFS"
       RELEASE_NOTES: |
-        This release contains KernelSU ${{ inputs.kernelsu_variant }} and SUSFS v1.5.5
+        These kernels are prebuilt with Offical KernelSU/MKSU/KernelSU-Next with SUSFS.
         
         Features:
         [+] KernelSU-${{ inputs.kernelsu_variant }}
@@ -465,88 +99,17 @@ jobs:
         [+] Magic Mount Support
 
         Module: 
-        -> https://github.com/sidex15/ksu_module_susfs
+        \- https://github.com/sidex15/ksu_module_susfs
+        
+        Managers:
+        \- KernelSU: https://github.com/tiann/KernelSU
+        \- 5ec1cff's KernelSU: https://github.com/5ec1cff/KernelSU
+        \- KernelSU-Next: https://github.com/rifsxd/KernelSU-Next
         
     steps:
       # Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Determine the branch for KernelSU-${{ inputs.kernelsu_variant }}
-        if: ${{ inputs.kernelsu_branch == 'Dev' }}
-        run: |
-          # Determine the branch based on user input
-          if [[ "${{ inputs.kernelsu_variant }}" == "Official" || "${{ inputs.kernelsu_variant }}" == "MKSU" ]]; then
-            BRANCH="main"
-          elif [[ "${{ inputs.kernelsu_variant }}" == "Next" ]]; then
-            BRANCH="next"
-          elif [[ "${{ inputs.kernelsu_branch }}" == "Other" && -n "${{ inputs.kernelsu_branch_other }}" ]]; then
-            BRANCH="${{ inputs.kernelsu_branch_other }}"
-          else
-            echo "Error: Custom branch not provided for 'Other'" >&2
-            exit 1
-          fi
-
-          # Store the selected branch in GITHUB_ENV
-          echo "KSU_BRANCH=$BRANCH" >> $GITHUB_ENV
-
-      - name: Get commit hash or tag and generate URL for KernelSU-${{ inputs.kernelsu_variant }}
-        run: |
-          if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
-            echo "This is the Official variant"
-            REPO_URL="https://github.com/tiann/KernelSU.git"
-            REPO_URL2="tiann/KernelSU"
-          elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
-            echo "This is the Next variant"
-            REPO_URL="https://github.com/rifsxd/KernelSU-Next.git"
-            REPO_URL2="rifsxd/KernelSU-Next"
-          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
-            echo "This is the MKSU variant"
-            REPO_URL="https://github.com/5ec1cff/KernelSU.git"
-            REPO_URL2="5ec1cff/KernelSU"
-          else
-            echo "Unknown variant"
-          fi
-          
-          BRANCH="${{ env.KSU_BRANCH }}"
-          
-          if [[ "$BRANCH" == "Stable" && "${{ inputs.kernelsu_variant }}" != "MKSU" ]]; then
-            # Fetch the latest tag
-            TAG=$(git ls-remote --tags --sort=-v:refname $REPO_URL | grep -o 'refs/tags/.*' | cut -d'/' -f3 | head -n1)
-            if [[ -z "$TAG" ]]; then
-              echo "Error: Could not fetch latest tag for KernelSU" >&2
-              exit 1
-            fi
-            KSU_REF=$TAG
-            KSU_URL="https://github.com/$REPO_URL2/releases/tag/$TAG"
-
-          elif [[ "$BRANCH" == "Dev" || "${{ inputs.kernelsu_variant }}" == "MKSU" ]]; then
-            # Fetch the latest commit from "next" branch
-            COMMIT_HASH=$(git ls-remote $REPO_URL refs/heads/$BRANCH | awk '{ print $1 }')
-            if [[ -z "$COMMIT_HASH" ]]; then
-              echo "Error: Could not fetch latest commit for KernelSU-Next Dev" >&2
-              exit 1
-            fi
-            KSU_REF=$COMMIT_HASH
-            KSU_URL="https://github.com/$REPO_URL2/commit/$COMMIT_HASH"
-
-          else
-            # Fetch the specific tag for the custom branch
-            TAG=$BRANCH
-            if git ls-remote --tags $REPO_URL | grep -q "refs/tags/$TAG"; then
-              KSU_REF=$TAG
-              KSU_URL="https://github.com/$REPO_URL2/releases/tag/$TAG"
-            else
-              echo "Error: Specified tag '$TAG' not found in KernelSU-Next" >&2
-              exit 1
-            fi
-          fi
-
-          # Echo the values to GitHub environment for later use
-          echo "KSU_REF=$KSU_REF" >> $GITHUB_ENV
-          echo "KSU_URL=$KSU_URL" >> $GITHUB_ENV
-          echo "KernelSU Reference: $KSU_REF"
-          echo "KernelSU URL: $KSU_URL"
 
       - name: Get commit hashes and generate commit URLs
         run: |
@@ -574,41 +137,12 @@ jobs:
 
       - name: Append Commit Hashes & Links to `RELEASE_NOTES` & Append KernelSU-Next Reference to `RELEASE_NOTES`
         run: |
-          if [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
-            echo "This is the Official variant"
-            echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-            echo "$RELEASE_NOTES" >> $GITHUB_ENV
-            echo "Official Manager:" >> $GITHUB_ENV
-            echo "-> https://github.com/tiann/KernelSU" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
-          elif [ "${{ inputs.kernelsu_variant }}" == "Next" ]; then
-            echo "This is the Next variant"
-            echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-            echo "$RELEASE_NOTES" >> $GITHUB_ENV
-            echo "Next Manager:" >> $GITHUB_ENV
-            echo "-> https://github.com/rifsxd/KernelSU-Next" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
-          elif [ "${{ inputs.kernelsu_variant }}" == "MKSU" ]; then
-            echo "This is the MKSU variant"
-            echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-            echo "$RELEASE_NOTES" >> $GITHUB_ENV
-            echo "MKSU Manager:" >> $GITHUB_ENV
-            echo "-> https://github.com/5ec1cff/KernelSU" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
-          else
-            echo "Unknown variant"
-          fi
-          
-      - name: Append Commit Hashes & Links to `RELEASE_NOTES` & Append KernelSU-Next Reference to `RELEASE_NOTES`
-        run: |
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
           echo "$RELEASE_NOTES" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           echo "LTO: ${{ inputs.lto_type }}" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
-          echo "Commit Hashes & Links:" >> $GITHUB_ENV
-          echo "KernelSU:" >> $GITHUB_ENV
-          echo "${{ inputs.kernelsu_variant }}-${{ inputs.kernelsu_branch }}: [$KSU_REF]($KSU_URL)" >> $GITHUB_ENV
+          echo "Commit Hashes:" >> $GITHUB_ENV
           echo "SUSFS4KSU:" >> $GITHUB_ENV
           echo "gki-android12-5.10: [$COMMIT_HASH_gki_android12_5_10]($COMMIT_URL_gki_android12_5_10)" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
