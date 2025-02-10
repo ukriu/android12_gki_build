@@ -33,7 +33,7 @@ jobs:
         with:
           root-reserve-mb: 8192
           temp-reserve-mb: 2048
-          swap-size-mb: 8192
+          swap-size-mb: ${{ inputs.lto_type == 'full' && 16384 || 8192 }}
           remove-dotnet: "true"
           remove-android: "true"
           remove-haskell: "true"
@@ -312,7 +312,7 @@ jobs:
           sed -i '$s|echo "\$res"|echo "\$res-🍻-blehSU-🍻"|' ./common/scripts/setlocalversion
 
           # Run perl command to modify UTS_VERSION
-          perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="# gold has to be the worst device ever"}' ./common/scripts/mkcompile_h
+          # perl -pi -e 's{UTS_VERSION="\$\(echo \$UTS_VERSION \$CONFIG_FLAGS \$TIMESTAMP \| cut -b -\$UTS_LEN\)"}{UTS_VERSION="# gold has to be the worst device ever"}' ./common/scripts/mkcompile_h
 
           echo "Building the kernel..."
           sed -i 's/-dirty//' ./common/scripts/setlocalversion
