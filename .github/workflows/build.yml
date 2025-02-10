@@ -12,6 +12,11 @@ on:
         required: true
         type: boolean
         default: true
+      release_type:
+        description: 'Make it a prerelease?'
+        required: true
+        type: boolean
+        default: true
       runner:
         description: "Choose runner"
         required: true
@@ -143,8 +148,8 @@ jobs:
           echo "LTO: ${{ inputs.lto_type }}" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           echo "Commit Hashes:" >> $GITHUB_ENV
-          echo "SUSFS4KSU:" >> $GITHUB_ENV
-          echo "gki-android12-5.10: [$COMMIT_HASH_gki_android12_5_10]($COMMIT_URL_gki_android12_5_10)" >> $GITHUB_ENV
+          echo "\- SUSFS4KSU:" >> $GITHUB_ENV
+          echo " \- gki-android12-5.10: [$COMMIT_HASH_gki_android12_5_10]($COMMIT_URL_gki_android12_5_10)" >> $GITHUB_ENV
           echo "" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
           
@@ -179,11 +184,11 @@ jobs:
 
       # Create GitHub Release and upload files if make_release is true
       - name: Create GitHub Release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.NEW_TAG }}  # Use the generated tag for the release
-          prerelease: true  # Mark the release as a pre-release
-          release_name: ${{ env.RELEASE_NAME }}  # Pass the RELEASE_NAME to the action
+          prerelease: ${{ inputs.release_type }}  # Mark the release as a pre-release
+          name: ${{ env.RELEASE_NAME }}  # Pass the RELEASE_NAME to the action
           body: ${{ env.RELEASE_NOTES }}  # Pass the RELEASE_NOTES to the action
 
       - name: Upload Release Assets Dynamically
