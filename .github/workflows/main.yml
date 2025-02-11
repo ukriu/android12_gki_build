@@ -92,26 +92,7 @@ jobs:
       REPO_NAME: android12_gki_build
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_NAME: "GKI Kernels With KernelSU & SUSFS"
-      RELEASE_NOTES: |
-        These kernels are prebuilt with Offical KernelSU/MKSU/KernelSU-Next with SUSFS.
-        
-        Features:
-        [+] KernelSU/MKSU/KernelSU-Next
-        [+] SUSFS ඞ v1.5.5 
-        [+] Wireguard Support
-        [+] Simple Maphide for LineageOS Detections
-        [+] Futile Maphide for jit-zygote-cache Detections
-        [+] Magic Mount Support (for MKSU/KernelSU-Next)
-        [+] Check out Wild+ Kernels for the source (in readme)
-        
-        Module: 
-        \- https://github.com/sidex15/ksu_module_susfs
-        
-        Managers:
-        \- KernelSU: https://github.com/tiann/KernelSU / https://t.me/KernelSU_group/3234
-        \- 5ec1cff's KernelSU (MKSU): https://github.com/5ec1cff/KernelSU / https://t.me/mksu_ci
-        \- KernelSU-Next: https://github.com/rifsxd/KernelSU-Next / https://t.me/ksunext_group/24847
-        
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -140,20 +121,6 @@ jobs:
             fi
           done
 
-      - name: Append Commit Hashes & Links to `RELEASE_NOTES` & Append KernelSU-Next Reference to `RELEASE_NOTES`
-        run: |
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-          echo "$RELEASE_NOTES" >> $GITHUB_ENV
-          echo "" >> $GITHUB_ENV
-          echo "LTO: ${{ inputs.lto_type }}" >> $GITHUB_ENV
-          echo "" >> $GITHUB_ENV
-          echo "Commit Hashes:" >> $GITHUB_ENV
-          echo "\- SUSFS4KSU:" >> $GITHUB_ENV
-          echo " \- gki-android12-5.10: [$COMMIT_HASH_gki_android12_5_10]($COMMIT_URL_gki_android12_5_10)" >> $GITHUB_ENV
-          echo "" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-          
-      # Get the Latest Tag from GitHub
       - name: Generate and Create New Tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -184,10 +151,36 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.NEW_TAG }}  # Use the generated tag for the release
-          prerelease: ${{ inputs.release_type }}  # Mark the release as a pre-release
-          name: ${{ env.RELEASE_NAME }}  # Pass the RELEASE_NAME to the action
-          body: ${{ env.RELEASE_NOTES }}  # Pass the RELEASE_NOTES to the action
+          tag_name: ${{ env.NEW_TAG }}
+          prerelease: ${{ inputs.release_type }}
+          name: ${{ env.RELEASE_NAME }}
+          body: |
+            These kernels are prebuilt with Offical KernelSU/MKSU/KernelSU-Next with SUSFS.
+            
+            Features:
+            [+] KernelSU/MKSU/KernelSU-Next
+            [+] SUSFS ඞ v1.5.5 
+            [+] Wireguard Support
+            [+] Simple Maphide for LineageOS Detections
+            [+] Futile Maphide for jit-zygote-cache Detections
+            [+] Magic Mount Support (for MKSU/KernelSU-Next)
+            [+] Check out Wild+ Kernels for the source (in readme)
+            
+            Actions Runner: ${{ inputs.runner }}
+            LTO: ${{ inputs.lto_type }}
+            Branch type for KSU: ${{ inputs.kernelsu_branch }}
+            blehSU Current Kernel Tag (Not Important): ${{ env.NEW_TAG }}
+            
+            Module:
+            \- https://github.com/sidex15/ksu_module_susfs
+            
+            Managers:
+            \- KernelSU: https://github.com/tiann/KernelSU / https://t.me/KernelSU_group/3234
+            \- 5ec1cff's KernelSU (MKSU): https://github.com/5ec1cff/KernelSU / https://t.me/mksu_ci
+            \- KernelSU-Next: https://github.com/rifsxd/KernelSU-Next / https://t.me/ksunext_group/24847
+            
+            Commit Hashes:
+            \- SUSFS4KSU: gki-android12-5.10: [$COMMIT_HASH_gki_android12_5_10]($COMMIT_URL_gki_android12_5_10)
 
       - name: Upload Release Assets Dynamically
         run: |
