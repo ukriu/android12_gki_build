@@ -180,7 +180,7 @@ jobs:
             \- KernelSU-Next: https://github.com/rifsxd/KernelSU-Next / https://t.me/ksunext_group/24847
             
             Commit Hashes:
-            \- SUSFS4KSU: gki-android12-5.10: [$COMMIT_HASH_gki_android12_5_10]($COMMIT_URL_gki_android12_5_10)
+            \- SUSFS4KSU: gki-android12-5.10: [${{ env.COMMIT_HASH_gki_android12_5_10 }}](${{ env.COMMIT_URL_gki_android12_5_10 }})
 
       - name: Upload Release Assets Dynamically
         run: |
