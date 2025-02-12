@@ -194,13 +194,6 @@ jobs:
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
 
-      - name: Add All Managers
-        if: ${{ inputs.kernelsu_variant == 'ALL' }}
-        run: |
-          cd "$CONFIG"
-          cp ../kernel_patches/apk_sign.c_fix.patch ./
-          patch -p1 -F 3 < apk_sign.c_fix.patch
-
       - name: Apply SUSFS Patches KernelSU
         if: ${{ inputs.kernelsu_variant == 'KSU' || inputs.kernelsu_variant == 'ALL' }}
         run: |
@@ -222,6 +215,13 @@ jobs:
           # Change to common directory and apply SUSFS patch
           cd ../common
           patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch || true
+
+      - name: Add All Managers
+        if: ${{ inputs.kernelsu_variant == 'ALL' }}
+        run: |
+          cd "$CONFIG"
+          cp ../kernel_patches/apk_sign.c_fix.patch ./
+          patch -p1 -F 3 < apk_sign.c_fix.patch
 
       - name: Apply SUSFS Patches KernelSU-Next
         if: ${{ inputs.kernelsu_variant == 'KSU_NEXT' }}
