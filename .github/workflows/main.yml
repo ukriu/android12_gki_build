@@ -186,12 +186,15 @@ jobs:
             \- https://github.com/sidex15/ksu_module_susfs
             
             Managers:
-            \- KernelSU (`KSU`): https://github.com/tiann/KernelSU / https://t.me/KernelSU_group/3234
-            \- 5ec1cff's KernelSU (`MKSU`): https://github.com/5ec1cff/KernelSU / https://t.me/mksu_ci
-            \- KernelSU-Next (`KSU_NEXT`): https://github.com/rifsxd/KernelSU-Next / https://t.me/ksunext_group/24847
+            \- KernelSU (`KSU`, `ALL`): https://github.com/tiann/KernelSU / https://t.me/KernelSU_group/3234
+            \- 5ec1cff's KernelSU (`MKSU`, `ALL`): https://github.com/5ec1cff/KernelSU / https://t.me/mksu_ci
+            \- KernelSU-Next (`KSU_NEXT`, `ALL`): https://github.com/rifsxd/KernelSU-Next / https://t.me/ksunext_group/24847
+            \- rsuntk's KernelSU (`ALL`): https://github.com/rsuntk/KernelSU / https://t.me/rsukrnlsu
+            \- backslashxx's KernelSU (`ALL`): https://github.com/backslashxx/KernelSU
             
-            The kernels starting with `ALL` have all of the above managers in one image and two more. They also use KernelSU-Next as the base.
-            I wont recommend you use these as it may cause issues, just use their respective images.
+            The kernels starting with `ALL` have all of the above managers in one image. They also use KernelSU as the base.  
+            I wont recommend you use these as it may cause issues, just use their respective images.  
+            There is little point to using the last two managers in this case as they are specifically made for non-gki KernelSU support.  
             
             Commit Hashes:
             \- SUSFS4KSU: gki-android12-5.10: [${{ env.COMMIT_HASH_gki_android12_5_10 }}](${{ env.COMMIT_URL_gki_android12_5_10 }})

@@ -135,7 +135,7 @@ jobs:
           $REPO --trace sync -c -j$(nproc --all) --no-tags --fail-fast
 
       - name: Determine the branch for KernelSU & MKSU
-        if: ${{ inputs.kernelsu_variant == 'KSU' || inputs.kernelsu_variant == 'MKSU' }}
+        if: ${{ inputs.kernelsu_variant == 'KSU' || inputs.kernelsu_variant == 'MKSU' || inputs.kernelsu_variant == 'ALL' }}
         run: |
           if [[ "${{ inputs.kernelsu_branch }}" == "Stable" ]]; then
             echo "BRANCH=-" >> $GITHUB_ENV
@@ -149,7 +149,7 @@ jobs:
           fi
           
       - name: Determine the branch for kernelsu-next
-        if: ${{ inputs.kernelsu_variant == 'KSU_NEXT' || inputs.kernelsu_variant == 'ALL' }}
+        if: ${{ inputs.kernelsu_variant == 'KSU_NEXT' }}
         run: |
           if [[ "${{ inputs.kernelsu_branch }}" == "Stable" ]]; then
             echo "BRANCH=-" >> $GITHUB_ENV
@@ -163,7 +163,7 @@ jobs:
           fi
           
       - name: Add KernelSU
-        if: ${{ inputs.kernelsu_variant == 'KSU' }}
+        if: ${{ inputs.kernelsu_variant == 'KSU' || inputs.kernelsu_variant == 'ALL' }}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -171,7 +171,7 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash $BRANCH
 
       - name: Add KernelSU-Next
-        if: ${{ inputs.kernelsu_variant == 'KSU_NEXT' || inputs.kernelsu_variant == 'ALL' }}
+        if: ${{ inputs.kernelsu_variant == 'KSU_NEXT' }}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -202,7 +202,7 @@ jobs:
           patch -p1 -F 3 < apk_sign.c_fix.patch
 
       - name: Apply SUSFS Patches KernelSU
-        if: ${{ inputs.kernelsu_variant == 'KSU' }}
+        if: ${{ inputs.kernelsu_variant == 'KSU' || inputs.kernelsu_variant == 'ALL' }}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
@@ -224,7 +224,7 @@ jobs:
           patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch || true
 
       - name: Apply SUSFS Patches KernelSU-Next
-        if: ${{ inputs.kernelsu_variant == 'KSU_NEXT' || inputs.kernelsu_variant == 'ALL' }}
+        if: ${{ inputs.kernelsu_variant == 'KSU_NEXT' }}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG"
