@@ -269,7 +269,7 @@ jobs:
         run: |
           cd "$CONFIG"
           cp ../kernel_patches/apk_sign.c_fix.patch ./
-          patch -p1 -F 3 < apk_sign.c_fix.patch
+          patch -p1 --ignore-whitespace < apk_sign.c_fix.patch
 
       - name: Apply Hide Stuff Patches
         run: |
