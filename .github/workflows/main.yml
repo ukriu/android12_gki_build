@@ -80,12 +80,23 @@ jobs:
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
 
+  build-all-ksu-gki:
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      runner: ${{ inputs.runner }}
+      lto_type: ${{ inputs.lto_type }}
+      kernelsu_variant: "ALL"
+      kernelsu_branch: ${{ inputs.kernelsu_branch }}
+      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+
   release:
     runs-on: ubuntu-latest
     needs:
         - build-ksu-gki
         - build-mksu-gki
         - build-ksu-next-gki
+        - build-all-ksu-gki
     if: ${{ inputs.make_release }}
     env:
       REPO_OWNER: ukriu
@@ -175,14 +186,17 @@ jobs:
             \- https://github.com/sidex15/ksu_module_susfs
             
             Managers:
-            \- KernelSU: https://github.com/tiann/KernelSU / https://t.me/KernelSU_group/3234
-            \- 5ec1cff's KernelSU (MKSU): https://github.com/5ec1cff/KernelSU / https://t.me/mksu_ci
-            \- KernelSU-Next: https://github.com/rifsxd/KernelSU-Next / https://t.me/ksunext_group/24847
+            \- KernelSU (`KSU`): https://github.com/tiann/KernelSU / https://t.me/KernelSU_group/3234
+            \- 5ec1cff's KernelSU (`MKSU`): https://github.com/5ec1cff/KernelSU / https://t.me/mksu_ci
+            \- KernelSU-Next (`KSU_NEXT`): https://github.com/rifsxd/KernelSU-Next / https://t.me/ksunext_group/24847
+            
+            The kernels starting with `ALL` have all of the above managers in one image and two more. They also use KernelSU-Next as the base.
+            I wont recommend you use these as it may cause issues, just use their respective images.
             
             Commit Hashes:
             \- SUSFS4KSU: gki-android12-5.10: [${{ env.COMMIT_HASH_gki_android12_5_10 }}](${{ env.COMMIT_URL_gki_android12_5_10 }})
 
-      - name: Upload Release Assets Dynamically
+      - name: Upload Release Assets
         run: |
           # Loop through all files in the downloaded-artifacts directory
           for file in ./downloaded-artifacts/*_kernel-*/*; do
