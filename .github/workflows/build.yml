@@ -162,7 +162,7 @@ jobs:
             exit 1
           fi
           
-      - name: Add KernelSU-Official
+      - name: Add KernelSU
         if: ${{ inputs.kernelsu_variant == 'KSU' }}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
@@ -178,7 +178,7 @@ jobs:
           echo "Adding KernelSU NEXT..."
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash $BRANCH
 
-      - name: Add KernelSU-MKSU
+      - name: Add MKSU
         if: ${{ inputs.kernelsu_variant == 'MKSU'}}
         run: |
           echo "Changing to configuration directory: $CONFIG..."
@@ -193,6 +193,13 @@ jobs:
           KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 12063)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
           sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+
+      - name: Add All Managers
+        if: ${{ inputs.kernelsu_variant == 'ALL' }}
+        run: |
+          cd "$CONFIG"
+          cp ../kernel_patches/apk_sign.c_fix.patch ./
+          patch -p1 -F 3 < apk_sign.c_fix.patch
 
       - name: Apply SUSFS Patches KernelSU
         if: ${{ inputs.kernelsu_variant == 'KSU' }}
@@ -263,13 +270,6 @@ jobs:
           # Change to common directory and apply SUSFS patch
           cd ../common
           patch -p1 < 50_add_susfs_in_gki-android12-5.10.patch || true
-
-      - name: Add all managers
-        if: ${{ inputs.kernelsu_variant == 'ALL' }}
-        run: |
-          cd "$CONFIG"
-          cp ../kernel_patches/apk_sign.c_fix.patch ./
-          patch -p1 --ignore-whitespace < apk_sign.c_fix.patch
 
       - name: Apply Hide Stuff Patches
         run: |
