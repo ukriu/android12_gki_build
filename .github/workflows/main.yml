@@ -77,8 +77,7 @@ jobs:
     needs:
         - build-kernels-a12
     env:
-      REPO_OWNER: ukriu
-      REPO_NAME: android15_gki_build
+      GITHUB_REPOSITORY: ${{ github.repository }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_NAME: "GKI Prebuilt Release"
     steps:
@@ -140,7 +139,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-            LATEST_TAG=$(gh api repos/$REPO_OWNER/$REPO_NAME/tags --jq '.[0].name')
+            LATEST_TAG=$(gh api repos/$GITHUB_REPOSITORY/tags --jq '.[0].name')
             if [ -z "$LATEST_TAG" ]; then
               LATEST_TAG="v1.5.5-r0"
             fi
