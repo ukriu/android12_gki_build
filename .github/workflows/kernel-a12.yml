@@ -42,8 +42,8 @@ jobs:
     secrets: inherit
     with:
       runner: ${{ inputs.runner }}
-      android_version: "android15"
-      kernel_version: "6.6"
+      android_version: "android12"
+      kernel_version: "5.10"
       sub_level: ${{ matrix.sub_level }}
       os_patch_level: ${{ matrix.os_patch_level }}
       revision: ${{ matrix.revision }}
