@@ -1,4 +1,4 @@
-name: Build kernels
+name: Build GKI
 
 permissions:
   contents: write
@@ -27,9 +27,11 @@ on:
         required: true
         type: choice
         options:
+          - ubuntu-latest
+          - ubuntu-24.04
           - ubuntu-22.04
           - ubuntu-22.04-local
-        default: ubuntu-22.04
+        default: ubuntu-latest
       lto_type:
         description: "Choose LTO type (full will not run on basic runners)"
         required: true
@@ -55,19 +57,14 @@ on:
         default: ""
 
 jobs:
-  build-kernels:
-    uses: ./.github/workflows/build.yml
+  build-kernels-a12:
+    uses: ./.github/workflows/kernel-a12.yml
     secrets: inherit
     strategy:
       matrix:
-        kernelsu_variant: [KSU, MKSU, KSU_NEXT, ALL]
-        sub_level: ["X"]
+        kernelsu_variant: [KSU, KSU_NEXT, ALL]
     with:
       runner: ${{ inputs.runner }}
-      android_version: "android12"
-      kernel_version: "5.10"
-      sub_level: ${{ matrix.sub_level }}
-      os_patch_level: "lts"
       lto_type: ${{ inputs.lto_type }}
       kernelsu_variant: ${{ matrix.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
@@ -77,13 +74,13 @@ jobs:
   release:
     runs-on: ubuntu-latest
     if: ${{ inputs.make_release }}
-    needs: build-kernels
+    needs:
+        - build-kernels-a12
     env:
       REPO_OWNER: ukriu
-      REPO_NAME: android12_gki_build
+      REPO_NAME: android15_gki_build
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      RELEASE_NAME: "GKI Kernels With KernelSU & SUSFS"
-      
+      RELEASE_NAME: "GKI Prebuilt Release"
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -95,6 +92,11 @@ jobs:
           
           declare -A BRANCH_MAP=(
             ["gki_android12_5_10"]="gki-android12-5.10"
+            ["gki_android13_5_10"]="gki-android13-5.10"
+            ["gki_android13_5_15"]="gki-android13-5.15"
+            ["gki_android14_5_15"]="gki-android14-5.15"
+            ["gki_android14_6_1"]="gki-android14-6.1"
+            ["gki_android15_6_6"]="gki-android15-6.6"
           )
           
           for var_name in "${!BRANCH_MAP[@]}"; do
@@ -111,6 +113,29 @@ jobs:
             fi
           done
 
+      - name: Get KernelSU variant refs and links
+        run: |
+          BRANCH="${{ inputs.kernelsu_branch }}"
+      
+          get_ref() {
+            local name="$1" repo="$2" path="$3" mode="$4"
+            if [[ "$mode" == "tag" ]]; then
+              ref=$(git ls-remote --tags --sort=-v:refname "$repo" | grep -o 'refs/tags/.*' | cut -d/ -f3 | head -n1)
+              url="https://github.com/$path/releases/tag/$ref"
+            else
+              ref=$(git ls-remote "$repo" HEAD | awk '{print $1}')
+              url="https://github.com/$path/commit/$ref"
+            fi
+            echo "${name}_REF=$ref" >> $GITHUB_ENV
+            echo "${name}_URL=$url" >> $GITHUB_ENV
+          }
+      
+          [[ "$BRANCH" == "Stable" ]] && MODE="tag" || MODE="commit"
+      
+          get_ref "KSU" "https://github.com/tiann/KernelSU.git" "tiann/KernelSU" "$MODE"
+          get_ref "KSU_NEXT" "https://github.com/KernelSU-Next/KernelSU-Next.git" "KernelSU-Next/KernelSU-Next" "$MODE"
+          get_ref "MKSU" "https://github.com/5ec1cff/KernelSU.git" "5ec1cff/KernelSU" "commit"
+
       - name: Generate and Create New Tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -121,10 +146,10 @@ jobs:
             fi
             
             NEW_TAG=$(echo "$LATEST_TAG" | awk -F'-r' '{suffix=$2; if (!suffix) suffix=0; suffix++; printf "%s-r%d", $1, suffix}')
-            
+    
             echo "New tag: $NEW_TAG"
             echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
-            
+
             git tag $NEW_TAG
             git push origin $NEW_TAG
 
@@ -141,9 +166,13 @@ jobs:
           files: ""
           name: ${{ env.RELEASE_NAME }}
           body: |
-            These kernels are prebuilt with Offical KernelSU/MKSU/KernelSU-Next with SUSFS.
+            These kernels are prebuilt with Offical KernelSU/MKSU/KernelSU-Next and with SUSFS.
             
             **SUSFS Present: ${{ inputs.include_susfs }}**
+            Actions Runner: ${{ inputs.runner }}
+            LTO: ${{ inputs.lto_type }}
+            Branch type for KSU: ${{ inputs.kernelsu_branch }}
+            blehSU Current Kernel Tag (Not Important): ${{ env.NEW_TAG }}
             
             Features:
             [+] KernelSU/MKSU/KernelSU-Next
@@ -152,12 +181,7 @@ jobs:
             [+] Simple Maphide for LineageOS Detections
             [+] Futile Maphide for jit-zygote-cache Detections
             [+] Magic Mount Support (for MKSU/KernelSU-Next)
-            [+] Check out Wild+ Kernels for the source (in readme)
-            
-            Actions Runner: ${{ inputs.runner }}
-            LTO: ${{ inputs.lto_type }}
-            Branch type for KSU: ${{ inputs.kernelsu_branch }}
-            blehSU Current Kernel Tag (Not Important): ${{ env.NEW_TAG }}
+            [+] Check out Wild+ Kernels for the partial source (in readme)
             
             Module:
             \- https://github.com/sidex15/ksu_module_susfs
@@ -169,8 +193,17 @@ jobs:
             \- rsuntk's KernelSU (`ALL`): https://github.com/rsuntk/KernelSU / https://t.me/rsukrnlsu
             \- backslashxx's KernelSU (`ALL`): https://github.com/backslashxx/KernelSU
             
-            Commit Hashes:
-            \- SUSFS4KSU: gki-android12-5.10: [${{ env.COMMIT_HASH_gki_android12_5_10 }}](${{ env.COMMIT_URL_gki_android12_5_10 }})
+            Commit Hashes (at the time of release):
+            \- KernelSU Official (`KSU`, `ALL`): [${{ env.KSU_REF }}](${{ env.KSU_URL }})
+            \- 5ec1cff's KernelSU (`MKSU`): [${{ env.MKSU_REF }}](${{ env.MKSU_URL }})
+            \- KernelSU Next (`KSU_NEXT`): [${{ env.KSU_NEXT_REF }}](${{ env.KSU_NEXT_URL }})
+            \- SUSFS4KSU: 
+              \- gki-android12-5.10: [${{ env.COMMIT_HASH_gki_android12_5_10 }}](${{ env.COMMIT_URL_gki_android12_5_10 }})
+              \- gki-android13-5.10: [${{ env.COMMIT_HASH_gki_android13_5_10 }}](${{ env.COMMIT_URL_gki_android13_5_10 }})
+              \- gki-android13-5.15: [${{ env.COMMIT_HASH_gki_android13_5_15 }}](${{ env.COMMIT_URL_gki_android13_5_15 }})
+              \- gki-android14-5.15: [${{ env.COMMIT_HASH_gki_android14_5_15 }}](${{ env.COMMIT_URL_gki_android14_5_15 }})
+              \- gki-android14-6.1: [${{ env.COMMIT_HASH_gki_android14_6_1 }}](${{ env.COMMIT_URL_gki_android14_6_1 }})
+              \- gki-android15-6.6: [${{ env.COMMIT_HASH_gki_android15_6_6 }}](${{ env.COMMIT_URL_gki_android15_6_6 }})
 
       - name: Upload Release Assets
         run: |

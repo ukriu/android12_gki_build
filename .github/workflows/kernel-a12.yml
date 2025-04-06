@@ -1,0 +1,54 @@
+name: Build Kernel - A12
+
+permissions:
+  contents: write
+  actions: write
+
+on:
+  workflow_call:
+    inputs:
+      runner:
+        required: true
+        type: string
+      lto_type:
+        required: true
+        type: string
+      include_susfs:
+        required: true
+        type: boolean
+      kernelsu_variant:
+        required: true
+        type: string
+      kernelsu_branch:
+        required: true
+        type: string
+      kernelsu_branch_other:
+        required: false
+        type: string
+
+jobs:
+  build-kernels-a12:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sub_level: "209"
+            os_patch_level: "2024-05"
+            revision: "r13"
+          - sub_level: "X"
+            os_patch_level: "lts"
+            revision: "r1"
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      runner: ${{ inputs.runner }}
+      android_version: "android15"
+      kernel_version: "6.6"
+      sub_level: ${{ matrix.sub_level }}
+      os_patch_level: ${{ matrix.os_patch_level }}
+      revision: ${{ matrix.revision }}
+      lto_type: ${{ inputs.lto_type }}
+      kernelsu_variant: ${{ inputs.kernelsu_variant }}
+      kernelsu_branch: ${{ inputs.kernelsu_branch }}
+      kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}
+      include_susfs: ${{ inputs.include_susfs }}
