@@ -77,8 +77,6 @@ jobs:
     needs:
         - build-kernels-a12
     env:
-      GITHUB_REPOSITORY: ${{ github.repository }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       RELEASE_NAME: "GKI Prebuilt Release"
     steps:
       - name: Checkout code
@@ -136,10 +134,8 @@ jobs:
           get_ref "MKSU" "https://github.com/5ec1cff/KernelSU.git" "5ec1cff/KernelSU" "commit"
 
       - name: Generate and Create New Tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-            LATEST_TAG=$(gh api repos/$GITHUB_REPOSITORY/tags --jq '.[0].name')
+            LATEST_TAG=$(gh api repos/${{ github.repository }}/tags --jq '.[0].name')
             if [ -z "$LATEST_TAG" ]; then
               LATEST_TAG="v1.5.5-r0"
             fi
