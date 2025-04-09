@@ -42,25 +42,6 @@ on:
         required: true
         type: boolean
         default: true
-      runner:
-        description: "Choose runner"
-        required: true
-        type: choice
-        options:
-          - ubuntu-latest
-          - ubuntu-24.04
-          - ubuntu-22.04
-          - ubuntu-22.04-local
-        default: ubuntu-latest
-      lto_type:
-        description: "Choose LTO type (full will not run on basic runners)"
-        required: true
-        type: choice
-        options:
-          - full
-          - thin
-          - none
-        default: thin
       kernelsu_branch:
         description: "Choose ksu branch"
         required: true
@@ -97,8 +78,6 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
     with:
-      runner: ${{ inputs.runner }}
-      lto_type: ${{ inputs.lto_type }}
       kernelsu_variant: ${{ matrix.kernelsu_variant }}
       kernelsu_branch: ${{ inputs.kernelsu_branch }}
       kernelsu_branch_other: ${{ inputs.kernelsu_branch_other }}

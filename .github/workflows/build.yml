@@ -7,12 +7,6 @@ permissions:
 on:
   workflow_call:
     inputs:
-      runner:
-        required: true
-        type: string
-      lto_type:
-        required: true
-        type: string
       include_susfs:
         required: true
         type: boolean
@@ -43,7 +37,7 @@ on:
 
 jobs:
   build-gki:
-    runs-on: ${{ inputs.runner }}
+    runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
@@ -55,7 +49,7 @@ jobs:
         with:
           root-reserve-mb: 8192
           temp-reserve-mb: 2048
-          swap-size-mb: ${{ inputs.lto_type == 'full' && 16384 || 8192 }}
+          swap-size-mb: 8192
           remove-dotnet: "true"
           remove-android: "true"
           remove-haskell: "true"
@@ -407,16 +401,15 @@ jobs:
             cd "$CONFIG"
             echo "Building the kernel..."
             if [ -f "build/build.sh" ]; then
-              LTO=${{ inputs.lto_type }} BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh CC="/usr/bin/ccache clang" || exit 1
+              LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh CC="/usr/bin/ccache clang" || exit 1
             else
-              tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=${{ inputs.lto_type }} //common:kernel_aarch64_dist || exit 1
+              tools/bazel build --disk_cache=/home/runner/.cache/bazel --config=fast --lto=thin //common:kernel_aarch64_dist || exit 1
             fi
             ccache --show-stats
 
       - name: Create Bootimgs Folder and Copy Images
         if: ${{ inputs.android_version == 'android12' || inputs.android_version == 'android13' }}
         run: |
-          echo "Changing to configuration directory: $CONFIG..."
           mkdir bootimgs
           
           echo "Creating bootimgs folder and copying images..."
@@ -431,7 +424,6 @@ jobs:
       - name: Create Bootimgs Folder and Copy Images
         if: ${{ inputs.android_version == 'android14' || inputs.android_version == 'android15' }}
         run: |
-          echo "Changing to configuration directory: $CONFIG..."
           mkdir bootimgs
 
           echo "Creating bootimgs folder and copying images..."
@@ -471,10 +463,7 @@ jobs:
         if: ${{ inputs.android_version == 'android13' || inputs.android_version == 'android14' || inputs.android_version == 'android15' }}
         run: |
           cd bootimgs
-
-          echo "Building Image.gz"
-          gzip -n -k -f -9 ./Image > ./Image.gz
-
+          
           echo "Building boot.img"
           $MKBOOTIMG --header_version 4 --kernel Image --output boot.img
           $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
@@ -527,9 +516,6 @@ jobs:
           echo "Running unpack_bootimg.py..."
           $UNPACK_BOOTIMG --boot_img="$FULL_PATH"
           
-          echo "Building Image.gz"
-          gzip -n -k -f -9 ./Image > ./Image.gz
-          
           echo "Building boot.img"
           $MKBOOTIMG --header_version 4 --kernel Image --output boot.img --ramdisk out/ramdisk --os_version 12.0.0 --os_patch_level "${{ inputs.os_patch_level }}"
           $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
@@ -545,11 +531,17 @@ jobs:
           $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot-lz4.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
           cp ./boot-lz4.img ../${{ inputs.kernelsu_variant }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-boot-lz4.img
 
+      - name: Compress all img files with gzip
+        run: |
+          for image in *.img; do
+            gzip -vnf9 "$image"
+          done
+
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.kernelsu_variant }}_kernel-${{ env.CONFIG }}
           path: |
             *.zip
-            *.img
+            *.img.gz
             *Image*
