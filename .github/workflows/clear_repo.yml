@@ -6,8 +6,7 @@ on:
 jobs:
   delete-releases-and-tags:
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    env: GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,6 +27,7 @@ jobs:
           done
 
       - name: Delete all local and remote tags
+        run: |
           echo "Fetching all tags..."
           git fetch --tags
 
