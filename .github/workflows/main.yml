@@ -22,26 +22,6 @@ on:
         required: true
         type: boolean
         default: true
-      include_ksu:
-        description: 'Include KSU?'
-        required: true
-        type: boolean
-        default: true
-      include_mksu:
-        description: 'Include MKSU?'
-        required: true
-        type: boolean
-        default: true
-      include_ksu_next:
-        description: 'Include KSU_NEXT?'
-        required: true
-        type: boolean
-        default: true
-      include_all:
-        description: 'Include ALL?'
-        required: true
-        type: boolean
-        default: true
       runner:
         description: "Choose runner"
         required: true
@@ -77,25 +57,12 @@ on:
         default: ""
 
 jobs:
-  set-matrix:
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - id: set-matrix
-        run: |
-          VARIANTS=()
-          [[ "${{ inputs.include_ksu }}" == "true" ]] && VARIANTS+=("\"KSU\"")
-          [[ "${{ inputs.include_ksu_next }}" == "true" ]] && VARIANTS+=("\"KSU_NEXT\"")
-          [[ "${{ inputs.include_mksu }}" == "true" ]] && VARIANTS+=("\"MKSU\"")
-          [[ "${{ inputs.include_all }}" == "true" ]] && VARIANTS+=("\"ALL\"")
-          echo "matrix={\"kernelsu_variant\": [${VARIANTS[*]}]}" >> $GITHUB_OUTPUT
-
   build-kernels-a12:
-    needs: set-matrix
     uses: ./.github/workflows/kernel-a12.yml
     secrets: inherit
     strategy:
-      matrix: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+      matrix:
+        kernelsu_variant: [KSU, MKSU, KSU_NEXT, ALL]
     with:
       runner: ${{ inputs.runner }}
       lto_type: ${{ inputs.lto_type }}
