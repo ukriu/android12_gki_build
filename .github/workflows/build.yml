@@ -262,7 +262,7 @@ jobs:
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/common"
-
+          
           #if [ "${{ inputs.kernelsu_variant }}" == "KSU" || "${{ inputs.kernelsu_variant }}" == "ALL"  ]; then
           #  echo "Applying hooks for Official KernelSU..."
           #  cp ../../kernel_patches/hooks/ksu_hooks.patch ./
@@ -281,7 +281,6 @@ jobs:
         run: |
           echo "Changing to configuration directory: $CONFIG..."
           cd "$CONFIG/common"
-          # Apply additional patch
           cp ../../kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
 
@@ -425,13 +424,13 @@ jobs:
         if: ${{ inputs.android_version == 'android14' || inputs.android_version == 'android15' }}
         run: |
           mkdir bootimgs
-
+          
           echo "Creating bootimgs folder and copying images..."
           cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ./bootimgs
           cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image.lz4 ./bootimgs
           cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image ./
           cp ./$CONFIG/bazel-bin/common/kernel_aarch64/Image.lz4 ./
-
+          
           # Create gzip of the Image file
           gzip -n -k -f -9 ./Image > ./Image.gz
 
@@ -439,20 +438,20 @@ jobs:
         run: |
           echo "Creating zip files for all formats..."
           cd ./AnyKernel3
-
+          
           # Create and upload zip for each format
           ZIP_NAME="${{ inputs.kernelsu_variant }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-AnyKernel3.zip"
           echo "Creating zip file: $ZIP_NAME..."
           mv ../Image ./Image
           zip -r "../$ZIP_NAME" ./*
           rm ./Image
-
+          
           ZIP_NAME="${{ inputs.kernelsu_variant }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-AnyKernel3-lz4.zip"
           echo "Creating zip file: $ZIP_NAME..."
           mv ../Image.lz4 ./Image.lz4
           zip -r "../$ZIP_NAME" ./*
           rm ./Image.lz4
-
+          
           ZIP_NAME="${{ inputs.kernelsu_variant }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-AnyKernel3-gz.zip"
           echo "Creating zip file: $ZIP_NAME..."
           mv ../Image.gz ./Image.gz
@@ -468,12 +467,12 @@ jobs:
           $MKBOOTIMG --header_version 4 --kernel Image --output boot.img
           $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
           cp ./boot.img ../${{ inputs.kernelsu_variant }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-boot.img
-
+          
           echo "Building boot-gz.img"
           $MKBOOTIMG --header_version 4 --kernel Image.gz --output boot-gz.img
           $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot-gz.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
           cp ./boot-gz.img ../${{ inputs.kernelsu_variant }}_${{ inputs.android_version }}-${{ inputs.kernel_version }}.${{ inputs.sub_level }}-${{ inputs.os_patch_level }}-boot-gz.img
-
+          
           echo "Building boot-lz4.img"
           $MKBOOTIMG --header_version 4 --kernel Image.lz4 --output boot-lz4.img
           $AVBTOOL add_hash_footer --partition_name boot --partition_size $((64 * 1024 * 1024)) --image boot-lz4.img --algorithm SHA256_RSA2048 --key $BOOT_SIGN_KEY_PATH
