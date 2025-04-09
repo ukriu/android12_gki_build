@@ -70,7 +70,9 @@ jobs:
           [[ "${{ inputs.include_ksu_next }}" == "true" ]] && VARIANTS+=("\"KSU_NEXT\"")
           [[ "${{ inputs.include_mksu }}" == "true" ]] && VARIANTS+=("\"MKSU\"")
           [[ "${{ inputs.include_all }}" == "true" ]] && VARIANTS+=("\"ALL\"")
-          echo "matrix={\"kernelsu_variant\": [${VARIANTS[*]}]}" >> $GITHUB_OUTPUT
+          
+          MATRIX_JSON="{\"kernelsu_variant\": [$(IFS=,; echo "${VARIANTS[*]}")]}"
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
   build-kernels-a12:
     needs: set-matrix
