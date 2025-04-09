@@ -59,6 +59,7 @@ on:
 
 jobs:
   set-matrix:
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
