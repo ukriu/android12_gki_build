@@ -26,6 +26,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - sub_level: "168"
+            os_patch_level: "2023-05"
+            revision: "r9"
           - sub_level: "209"
             os_patch_level: "2024-05"
             revision: "r13"
